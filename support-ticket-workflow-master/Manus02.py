@@ -10,6 +10,9 @@ import time
 import string
 import random
 
+
+
+
 # DB-Konfiguration
 DB_USER = "root"
 DB_PASSWORD = "Xyz1343!!!"
@@ -74,10 +77,7 @@ def get_column_types(table):
 
 # Hilfsfunktion: Durchsuchbare Spalten einer Tabelle ermitteln
 def get_searchable_columns(table):
-    """
-    Ermittelt Spalten einer Tabelle, die für die Suche geeignet sind.
-    Filtert Binärdaten und andere nicht-durchsuchbare Spaltentypen heraus.
-    """
+
     try:
         column_types = get_column_types(table)
         searchable_columns = []
@@ -100,19 +100,6 @@ def get_searchable_columns(table):
 
 # Hilfsfunktion: Tabelle durchsuchen
 def search_table(table_name, search_term, search_columns=None, exact_match=False, case_sensitive=False):
-    """
-    Durchsucht eine Tabelle nach einem Suchbegriff.
-
-    Args:
-        table_name: Name der Tabelle
-        search_term: Suchbegriff
-        search_columns: Liste der zu durchsuchenden Spalten (None = alle durchsuchbaren Spalten)
-        exact_match: Ob exakte Übereinstimmung gefordert ist
-        case_sensitive: Ob Groß-/Kleinschreibung beachtet werden soll
-
-    Returns:
-        DataFrame mit den Suchergebnissen
-    """
     try:
         if not search_term:
             return pd.DataFrame()
@@ -239,7 +226,6 @@ def generate_temp_password(length=12):
 
 # Authentifizierungsfunktion
 def authenticate_user(username_or_email, password):
-    """Authentifiziert einen Benutzer anhand von Benutzername/E-Mail und Passwort."""
     try:
         # Kleine Verzögerung als Schutz vor Brute-Force-Angriffen
         time.sleep(0.5)
@@ -328,7 +314,7 @@ def ensure_required_columns_exist():
 
 # Funktion zur Passwort-Wiederherstellung
 def reset_password(email):
-    """Setzt das Passwort eines Benutzers zurück und generiert ein temporäres Passwort."""
+
     try:
         # Benutzer in der Datenbank suchen
         query = text("""
