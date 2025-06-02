@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import altair as alt
 import hashlib
 import secrets
-import times
+import time
 import string
 import random
 
