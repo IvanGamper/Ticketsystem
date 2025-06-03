@@ -1350,6 +1350,16 @@ class UIComponents:
                 except (ValueError, TypeError):
                     current_status_index = 0
 
+                status_options = [int(x) for x in status_df["ID_Status"].tolist()]
+            # Find the index of the current status
+            current_status_index = 0
+            if not status_df[status_df["Name"] == ticket["Status"]].empty:
+                current_status = status_df[status_df["Name"] == ticket["Status"]]["ID_Status"].iloc[0]
+                try:
+                    current_status_index = status_options.index(int(current_status))
+                except (ValueError, TypeError):
+                    current_status_index = 0
+
             status_id = st.selectbox(
                 "Status",
                 options=status_options,
@@ -1365,12 +1375,21 @@ class UIComponents:
                 index=priority_options.index(ticket["Priorität"]) if ticket["Priorität"] in priority_options else 0
             )
 
-            # Zugewiesener Mitarbeiter
+            mitarbeiter_options = [int(x) for x in mitarbeiter_df["ID_Mitarbeiter"].tolist()]
+            # Find the index of the current mitarbeiter
+            current_mitarbeiter_index = 0
+            if not mitarbeiter_df[mitarbeiter_df["ID_Mitarbeiter"] == ticket["ID_Mitarbeiter"]].empty:
+                current_mitarbeiter = ticket["ID_Mitarbeiter"]
+                try:
+                    current_mitarbeiter_index = mitarbeiter_options.index(int(current_mitarbeiter))
+                except (ValueError, TypeError):
+                    current_mitarbeiter_index = 0
+
             mitarbeiter_id = st.selectbox(
                 "Zugewiesen an",
-                options=mitarbeiter_df["ID_Mitarbeiter"].tolist(),
+                options=mitarbeiter_options,
                 format_func=lambda x: mitarbeiter_df[mitarbeiter_df["ID_Mitarbeiter"] == x]["Name"].iloc[0],
-                index=mitarbeiter_df[mitarbeiter_df["ID_Mitarbeiter"] == ticket["ID_Mitarbeiter"]].index[0] if not mitarbeiter_df[mitarbeiter_df["ID_Mitarbeiter"] == ticket["ID_Mitarbeiter"]].empty else 0
+                index=current_mitarbeiter_index
             )
 
             submit = st.form_submit_button("Ticket aktualisieren")
@@ -1657,13 +1676,20 @@ class UIComponents:
             email = st.text_input("E-Mail")
             password = st.text_input("Passwort", type="password")
 
-            rolle_id = st.selectbox(
-                "Rolle",
-                options=rollen_df["ID_Rolle"].tolist(),
-                format_func=lambda x: rollen_df[rollen_df["ID_Rolle"] == x]["Name"].iloc[0]
-            )
+                        # Check if the column exists before accessing it
+            if "ID_Rolle" in rollen_df.columns:
+                rolle_options = [int(x) for x in rollen_df["ID_Rolle"].tolist()]
+                rolle_id = st.selectbox(
+                    "Rolle",
+                    options=rolle_options,
+                    format_func=lambda x: rollen_df[rollen_df["ID_Rolle"] == x]["Name"].iloc[0]
+                )
+            else:
+                st.error("Fehler: Die Spalte 'ID_Rolle' wurde nicht gefunden. Bitte überprüfen Sie die Datenbankstruktur.")
+                rolle_id = None
 
-            submit = st.form_submit_button("Mitarbeiter hinzufügen")
+
+                submit = st.form_submit_button("Mitarbeiter hinzufügen")
 
         if submit:
             if not name or not email or not password:
@@ -1953,9 +1979,10 @@ class UIComponents:
 
         if primary_key:
             # Datensatz-ID eingeben
-            record_id = st.number_input(f"{primary_key}-Wert", min_value=1, step=1)
+            record_id = st.number_input(f"{primary_key}-Wert", min_value=1, step=1, key=f"record_id_input_{table_name}")
 
-            if st.button("Datensatz laden"):
+
+            if st.button("Datensatz laden", key=f"load_record_{table_name}"):
                 # Datensatz abrufen
                 query = f"SELECT * FROM {table_name} WHERE {primary_key} = :record_id"
                 record_df = DatabaseManager.execute_query_to_dataframe(query, {"record_id": record_id})
@@ -1977,7 +2004,7 @@ class UIComponents:
 
                                 # Feldtyp bestimmen
                                 if isinstance(value, (int, float)):
-                                    updated_values[column] = st.number_input(column, value=value)
+                                    updated_values[column] = st.number_input(column, value=value, key=f"edit_{table_name}_{column}")
                                 elif isinstance(value, datetime):
                                     updated_values[column] = st.date_input(column, value=value)
                                 else:
@@ -2012,7 +2039,8 @@ class UIComponents:
         columns = inspector.get_columns(table_name)
 
         if columns:
-            with st.form("new_record_form"):
+            with st.form(f"new_record_form_{table_name}"):
+
                 # Felder dynamisch erstellen
                 new_values = {}
 
@@ -2023,15 +2051,16 @@ class UIComponents:
                     # Primärschlüssel überspringen, wenn er automatisch generiert wird
 
                     default_value = column.get("default", "")
+                    default_value = column.get("default", "")
                     if column_name == primary_key and default_value is not None and "autoincrement" in default_value:
 
                         continue
 
                     # Feldtyp bestimmen
                     if "int" in column_type:
-                        new_values[column_name] = st.number_input(column_name, value=0)
+                        new_values[column_name] = st.number_input(column_name, value=0, key=f"new_{table_name}_{column_name}")
                     elif "float" in column_type or "double" in column_type or "decimal" in column_type:
-                        new_values[column_name] = st.number_input(column_name, value=0.0, format="%.2f")
+                        new_values[column_name] = st.number_input(column_name, value=0.0, format="%.2f", key=f"new_float_{table_name}_{column_name}")
                     elif "date" in column_type:
                         new_values[column_name] = st.date_input(column_name)
                     elif "time" in column_type:
