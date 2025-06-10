@@ -11,6 +11,8 @@ import random
 import os
 from functools import lru_cache
 import logging
+from simple_email_function import setup_email_system, send_ticket_notification
+
 
 # Konfiguration für Logging
 logging.basicConfig(
@@ -1339,7 +1341,7 @@ class UIComponents:
         # Formular zum Bearbeiten des Tickets
         with st.form("edit_ticket_form"):
 
-                # Convert options to native Python int
+            # Convert options to native Python int
             status_options = [int(x) for x in status_df["ID_Status"].tolist()]
             # Find the index of the current status
             current_status_index = 0
@@ -1676,7 +1678,7 @@ class UIComponents:
             email = st.text_input("E-Mail")
             password = st.text_input("Passwort", type="password")
 
-                        # Check if the column exists before accessing it
+            # Check if the column exists before accessing it
             if "ID_Rolle" in rollen_df.columns:
                 rolle_options = [int(x) for x in rollen_df["ID_Rolle"].tolist()]
                 rolle_id = st.selectbox(
