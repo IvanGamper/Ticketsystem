@@ -4,6 +4,10 @@ from sqlalchemy import create_engine, text, inspect
 from datetime import datetime, timedelta
 
 from a import (
+
+    search_table,
+    get_searchable_columns,
+    get_column_types,
     generate_salt,
     hash_password,
     verify_password,
@@ -13,7 +17,8 @@ from a import (
     change_password,
     show_password_reset_page,
     show_password_change_page,
-    show_login_page
+    show_login_page,
+
 )
 from t import (
     show_ticket_system,
@@ -47,6 +52,7 @@ inspector = inspect(engine)
 
 # Hilfsfunktion: Primärschlüssel einer Tabelle ermitteln
 def get_primary_key(table):
+
     try:
         pk = inspector.get_pk_constraint(table)
         if pk and 'constrained_columns' in pk and pk['constrained_columns']:
@@ -63,96 +69,9 @@ def get_primary_key(table):
     except:
         return None
 
-# Hilfsfunktion: Spaltentypen einer Tabelle
-def get_column_types(table):
-    try:
-        return {col["name"]: str(col["type"]) for col in inspector.get_columns(table)}
-    except:
-        return {}
 
-# Hilfsfunktion: Durchsuchbare Spalten einer Tabelle ermitteln
-def get_searchable_columns(table):
-    try:
-        column_types = get_column_types(table)
-        searchable_columns = []
-
-        for col, type_str in column_types.items():
-            # Spaltentypen, die für die Suche geeignet sind
-            if any(text_type in type_str.lower() for text_type in ['char', 'text', 'varchar', 'enum']):
-                searchable_columns.append(col)
-            # Numerische Typen sind auch durchsuchbar
-            elif any(num_type in type_str.lower() for num_type in ['int', 'decimal', 'float', 'double']):
-                searchable_columns.append(col)
-            # Datum/Zeit-Typen sind auch durchsuchbar
-            elif any(date_type in type_str.lower() for date_type in ['date', 'time', 'datetime', 'timestamp']):
-                searchable_columns.append(col)
-
-        return searchable_columns
-    except Exception as e:
-        st.error(f"Fehler beim Ermitteln der durchsuchbaren Spalten: {str(e)}")
-        return []
-
-# Hilfsfunktion: Tabelle durchsuchen
-def search_table(table_name, search_term, search_columns=None, exact_match=False, case_sensitive=False):
-    try:
-        if not search_term:
-            return pd.DataFrame()
-
-        # Durchsuchbare Spalten ermitteln
-        if search_columns is None:
-            search_columns = get_searchable_columns(table_name)
-
-        if not search_columns:
-            st.warning(f"Keine durchsuchbaren Spalten in der Tabelle '{table_name}' gefunden.")
-            return pd.DataFrame()
-
-        # SQL-Abfrage erstellen
-        conditions = []
-        params = {}
-
-        for i, col in enumerate(search_columns):
-            param_name = f"search_term_{i}"
-
-            if exact_match:
-                # Exakte Übereinstimmung
-                if case_sensitive:
-                    conditions.append(f"{col} = :{param_name}")
-                else:
-                    conditions.append(f"LOWER({col}) = :{param_name}")
-                    search_term = search_term.lower()
-
-                params[param_name] = search_term
-            else:
-                # Teilweise Übereinstimmung
-                if case_sensitive:
-                    conditions.append(f"{col} LIKE :{param_name}")
-                else:
-                    conditions.append(f"LOWER({col}) LIKE :{param_name}")
-                    search_term = search_term.lower()
-
-                params[param_name] = f"%{search_term}%"
-
-        # WHERE-Klausel erstellen
-        where_clause = " OR ".join(conditions)
-
-        # SQL-Abfrage ausführen
-        query = text(f"SELECT * FROM {table_name} WHERE {where_clause}")
-
-        with engine.connect() as conn:
-            result = conn.execute(query, params)
-            columns = result.keys()
-            data = result.fetchall()
-
-        # DataFrame erstellen
-        df = pd.DataFrame(data, columns=columns)
-        return df
-
-    except Exception as e:
-        st.error(f"Fehler bei der Suche: {str(e)}")
-        return pd.DataFrame()
-
-# Funktion zur Überprüfung, ob die erforderlichen Spalten existieren, und falls nicht, sie hinzufügen
 def ensure_required_columns_exist():
+    from d import engine
     try:
         # Prüfen, ob die salt-Spalte bereits existiert
         mitarbeiter_columns = get_columns("mitarbeiter")
@@ -181,6 +100,7 @@ def ensure_required_columns_exist():
     except Exception as e:
         st.error(f"Fehler beim Überprüfen/Hinzufügen der erforderlichen Spalten: {str(e)}")
         return False
+
 
 # Hauptfunktion
 def main():
@@ -601,72 +521,143 @@ def show_database_management():
     with tab4:
         st.subheader("Datensatz löschen")
 
+        # Session-State für den Löschvorgang initialisieren
+        if "delete_state" not in st.session_state:
+            st.session_state.delete_state = "initial"  # Mögliche Zustände: initial, confirm, executing
+
+        if "delete_table" not in st.session_state:
+            st.session_state.delete_table = None
+
+        if "delete_id_column" not in st.session_state:
+            st.session_state.delete_id_column = None
+
+        if "delete_id_value" not in st.session_state:
+            st.session_state.delete_id_value = None
+
+        if "delete_df" not in st.session_state:
+            st.session_state.delete_df = pd.DataFrame()
+
+        if "delete_option" not in st.session_state:
+            st.session_state.delete_option = "Standard-Löschung"
+
         try:
             tabellen = inspector.get_table_names()
-            table_choice_delete = st.selectbox("Tabelle wählen (Löschen)", tabellen, key="delete_table")
+            table_choice_delete = st.selectbox("Tabelle wählen (Löschen)", tabellen, key="delete_table_select")
             spalten_delete = get_columns(table_choice_delete)
-            id_spalte_delete = st.selectbox("Primärschlüsselspalte", spalten_delete, key="primary_column_delete")
+            id_spalte_delete = st.selectbox("Primärschlüsselspalte", spalten_delete, key="primary_column_delete_select")
 
-            if st.button("🔄 Daten zum Löschen laden"):
+            # Daten laden Button
+            if st.button("🔄 Daten zum Löschen laden", key="load_delete_data"):
                 df_delete = pd.read_sql(f"SELECT * FROM {table_choice_delete}", con=engine)
-                st.dataframe(df_delete, use_container_width=True)
+                st.session_state.delete_df = df_delete
+                st.session_state.delete_table = table_choice_delete
+                st.session_state.delete_id_column = id_spalte_delete
+                st.session_state.delete_state = "initial"
+                st.rerun()  # Wichtig: Seite neu laden, um UI-Elemente korrekt anzuzeigen
 
-                if not df_delete.empty:
+            # Wenn Daten geladen wurden, zeige sie an
+            if not st.session_state.delete_df.empty:
+                st.dataframe(st.session_state.delete_df, use_container_width=True)
+
+                # Nur wenn wir nicht im Bestätigungsmodus sind, zeige die Auswahlfelder
+                if st.session_state.delete_state == "initial":
+                    # ID zum Löschen auswählen
                     selected_id_to_delete = st.selectbox(
-                        f"Datensatz zum Löschen auswählen ({id_spalte_delete})",
-                        df_delete[id_spalte_delete].tolist()
+                        f"Datensatz zum Löschen auswählen ({st.session_state.delete_id_column})",
+                        st.session_state.delete_df[st.session_state.delete_id_column].tolist(),
+                        key="delete_id_select"
                     )
 
                     # Löschoptionen
                     delete_option = st.radio(
                         "Löschmethode wählen:",
                         ["Standard-Löschung", "Erweiterte Löschung (mit Abhängigkeiten)"],
+                        key="delete_option_radio",
                         help="Standard-Löschung versucht nur den ausgewählten Datensatz zu löschen. Erweiterte Löschung löscht auch abhängige Datensätze."
                     )
 
-                    # WICHTIG: Dieser Button muss AUSSERHALB der if-Bedingung für "Daten zum Löschen laden" sein
-                    delete_button = st.button("🗑️ Datensatz löschen")
+                    # Lösch-Button
+                    if st.button("🗑️ Datensatz löschen", key="delete_record_button"):
+                        # Werte speichern und in den Bestätigungsmodus wechseln
+                        st.session_state.delete_id_value = selected_id_to_delete
+                        st.session_state.delete_option = delete_option
+                        st.session_state.delete_state = "confirm"
+                        st.rerun()  # Wichtig: Seite neu laden, um Bestätigungsdialog anzuzeigen
 
-                    if delete_button:
-                        if delete_option == "Standard-Löschung":
-                            try:
-                                with engine.begin() as conn:
-                                    query = text(f"DELETE FROM {table_choice_delete} WHERE {id_spalte_delete} = :value")
-                                    result = conn.execute(query, {"value": selected_id_to_delete})
+                # Bestätigungsdialog anzeigen
+                elif st.session_state.delete_state == "confirm":
+                    st.warning(f"⚠️ Sind Sie sicher, dass Sie den Datensatz mit {st.session_state.delete_id_column} = {st.session_state.delete_id_value} löschen möchten?")
 
-                                    if result.rowcount > 0:
-                                        st.success(f"✅ Datensatz mit {id_spalte_delete} = {selected_id_to_delete} gelöscht.")
-                                    else:
-                                        st.warning(f"⚠️ Kein Datensatz gelöscht. Möglicherweise wurde er bereits entfernt.")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("✅ Ja, löschen", key="confirm_delete_button"):
+                            st.session_state.delete_state = "executing"
+                            st.rerun()  # Wichtig: Seite neu laden, um Löschvorgang auszuführen
+                    with col2:
+                        if st.button("❌ Abbrechen", key="cancel_delete_button"):
+                            st.session_state.delete_state = "initial"
+                            st.rerun()  # Zurück zum Ausgangszustand
 
-                                # Daten neu laden
-                                df_delete = pd.read_sql(f"SELECT * FROM {table_choice_delete}", con=engine)
-                                st.write("Aktualisierte Tabellendaten:")
-                                st.dataframe(df_delete)
+                # Löschvorgang ausführen
+                elif st.session_state.delete_state == "executing":
+                    if st.session_state.delete_option == "Standard-Löschung":
+                        try:
+                            with engine.begin() as conn:
+                                query = text(f"DELETE FROM {st.session_state.delete_table} WHERE {st.session_state.delete_id_column} = :value")
+                                result = conn.execute(query, {"value": st.session_state.delete_id_value})
 
-                            except Exception as e:
-                                st.error("❌ Fehler beim Löschen:")
-                                st.exception(e)
+                                if result.rowcount > 0:
+                                    st.success(f"✅ Datensatz mit {st.session_state.delete_id_column} = {st.session_state.delete_id_value} gelöscht.")
+                                    # Daten neu laden
+                                    df_delete = pd.read_sql(f"SELECT * FROM {st.session_state.delete_table}", con=engine)
+                                    st.session_state.delete_df = df_delete
+                                    st.write("Aktualisierte Tabellendaten:")
+                                    st.dataframe(df_delete)
+                                    # Zurück zum Ausgangszustand
+                                    st.session_state.delete_state = "initial"
+                                else:
+                                    st.warning(f"⚠️ Kein Datensatz gelöscht. Möglicherweise wurde er bereits entfernt.")
+                                    st.session_state.delete_state = "initial"
 
-                                # Detaillierte Fehlermeldung für Fremdschlüsselprobleme
-                                error_str = str(e)
-                                if "foreign key constraint fails" in error_str.lower():
-                                    st.error("""
-                                    **Fremdschlüssel-Constraint-Fehler erkannt!**
-                                    
-                                    Der Datensatz kann nicht gelöscht werden, da er noch von anderen Tabellen referenziert wird.
-                                    Bitte verwenden Sie die 'Erweiterte Löschung' Option oder löschen Sie zuerst alle abhängigen Datensätze.
-                                    """)
-                        else:
-                            # Erweiterte Löschung mit Abhängigkeiten
-                            enhanced_delete_function(table_choice_delete, id_spalte_delete, selected_id_to_delete)
-                else:
-                    st.info(f"Keine Daten in der Tabelle {table_choice_delete}.")
+                        except Exception as e:
+                            st.error("❌ Fehler beim Löschen:")
+                            st.exception(e)
+
+                            # Detaillierte Fehlermeldung für Fremdschlüsselprobleme
+                            error_str = str(e)
+                            if "foreign key constraint fails" in error_str.lower():
+                                st.error("""
+                                **Fremdschlüssel-Constraint-Fehler erkannt!**
+                                
+                                Der Datensatz kann nicht gelöscht werden, da er noch von anderen Tabellen referenziert wird.
+                                Bitte verwenden Sie die 'Erweiterte Löschung' Option oder löschen Sie zuerst alle abhängigen Datensätze.
+                                """)
+
+                            # Zurück zum Ausgangszustand nach Fehler
+                            st.session_state.delete_state = "initial"
+                    else:
+                        # Erweiterte Löschung mit Abhängigkeiten
+                        success = enhanced_delete_function(
+                            st.session_state.delete_table,
+                            st.session_state.delete_id_column,
+                            st.session_state.delete_id_value
+                        )
+
+                        if success:
+                            # Daten neu laden
+                            df_delete = pd.read_sql(f"SELECT * FROM {st.session_state.delete_table}", con=engine)
+                            st.session_state.delete_df = df_delete
+                            st.write("Aktualisierte Tabellendaten:")
+                            st.dataframe(df_delete)
+
+                        # Zurück zum Ausgangszustand
+                        st.session_state.delete_state = "initial"
+            else:
+                st.info("Bitte laden Sie zuerst Daten zum Löschen.")
 
         except Exception as e:
             st.error("❌ Fehler beim Laden der Daten zum Löschen:")
             st.exception(e)
+            # Zurück zum Ausgangszustand nach Fehler
+            st.session_state.delete_state = "initial"
 
-# Hauptfunktion aufrufen
-if __name__ == "__main__":
-    main()

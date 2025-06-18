@@ -5,7 +5,103 @@ from sqlalchemy import text
 from datetime import datetime, timedelta
 import string
 import random
+import pandas as pd
 import streamlit as st
+
+
+
+# Hilfsfunktion: Spaltentypen einer Tabelle
+def get_column_types(table):
+    from d import inspector
+    try:
+        return {col["name"]: str(col["type"]) for col in inspector.get_columns(table)}
+    except:
+        return {}
+
+# Hilfsfunktion: Durchsuchbare Spalten einer Tabelle ermitteln
+def get_searchable_columns(table):
+    try:
+        column_types = get_column_types(table)
+        searchable_columns = []
+
+        for col, type_str in column_types.items():
+            # Spaltentypen, die für die Suche geeignet sind
+            if any(text_type in type_str.lower() for text_type in ['char', 'text', 'varchar', 'enum']):
+                searchable_columns.append(col)
+            # Numerische Typen sind auch durchsuchbar
+            elif any(num_type in type_str.lower() for num_type in ['int', 'decimal', 'float', 'double']):
+                searchable_columns.append(col)
+            # Datum/Zeit-Typen sind auch durchsuchbar
+            elif any(date_type in type_str.lower() for date_type in ['date', 'time', 'datetime', 'timestamp']):
+                searchable_columns.append(col)
+
+        return searchable_columns
+    except Exception as e:
+        st.error(f"Fehler beim Ermitteln der durchsuchbaren Spalten: {str(e)}")
+        return []
+
+# Hilfsfunktion: Tabelle durchsuchen
+def search_table(table_name, search_term, search_columns=None, exact_match=False, case_sensitive=False):
+    from d import engine
+    try:
+        if not search_term:
+            return pd.DataFrame()
+
+        # Durchsuchbare Spalten ermitteln
+        if search_columns is None:
+            search_columns = get_searchable_columns(table_name)
+
+        if not search_columns:
+            st.warning(f"Keine durchsuchbaren Spalten in der Tabelle '{table_name}' gefunden.")
+            return pd.DataFrame()
+
+        # SQL-Abfrage erstellen
+        conditions = []
+        params = {}
+
+        for i, col in enumerate(search_columns):
+            param_name = f"search_term_{i}"
+
+            if exact_match:
+                # Exakte Übereinstimmung
+                if case_sensitive:
+                    conditions.append(f"{col} = :{param_name}")
+                else:
+                    conditions.append(f"LOWER({col}) = :{param_name}")
+                    search_term = search_term.lower()
+
+                params[param_name] = search_term
+            else:
+                # Teilweise Übereinstimmung
+                if case_sensitive:
+                    conditions.append(f"{col} LIKE :{param_name}")
+                else:
+                    conditions.append(f"LOWER({col}) LIKE :{param_name}")
+                    search_term = search_term.lower()
+
+                params[param_name] = f"%{search_term}%"
+
+        # WHERE-Klausel erstellen
+        where_clause = " OR ".join(conditions)
+
+        # SQL-Abfrage ausführen
+        query = text(f"SELECT * FROM {table_name} WHERE {where_clause}")
+
+        with engine.connect() as conn:
+            result = conn.execute(query, params)
+            columns = result.keys()
+            data = result.fetchall()
+
+        # DataFrame erstellen
+        df = pd.DataFrame(data, columns=columns)
+        return df
+
+    except Exception as e:
+        st.error(f"Fehler bei der Suche: {str(e)}")
+        return pd.DataFrame()
+
+#
+
 
 
 # Passwort-Hashing-Funktionen
