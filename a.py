@@ -8,8 +8,6 @@ import random
 import pandas as pd
 import streamlit as st
 
-
-
 # Hilfsfunktion: Spaltentypen einer Tabelle
 def get_column_types(table):
     from d import inspector
@@ -99,10 +97,6 @@ def search_table(table_name, search_term, search_columns=None, exact_match=False
     except Exception as e:
         st.error(f"Fehler bei der Suche: {str(e)}")
         return pd.DataFrame()
-
-#
-
-
 
 # Passwort-Hashing-Funktionen
 def generate_salt():
