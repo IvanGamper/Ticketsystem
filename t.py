@@ -1342,8 +1342,6 @@ def add_ticket_delete_button(ticket_id):
         elif cancel_delete:
             st.info("Löschvorgang abgebrochen.")
 
-
-
 # Hilfsfunktion: Spaltennamen einer Tabelle
 def get_columns(table):
 

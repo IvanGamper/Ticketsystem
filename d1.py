@@ -5,207 +5,293 @@ from datetime import datetime
 from a import (generate_salt, hash_password, get_searchable_columns, search_table, get_column_types)
 from t import (create_ticket_relations, get_columns)
 
+# Verbesserte Löschfunktion mit schrittweiser Bestätigung
+def step_by_step_delete_function(table_choice_delete, id_spalte_delete, selected_id_to_delete):
 
-# Verbesserte Löschfunktion für die Datenbankverwaltung mit zusätzlichen Abhängigkeiten
-def enhanced_delete_function(table_choice_delete, id_spalte_delete, selected_id_to_delete):
     from d import engine
 
-    """
-    Verbesserte Löschfunktion, die Fremdschlüsselbeziehungen berücksichtigt
-    und abhängige Datensätze in der richtigen Reihenfolge löscht.
+    # Initialisierung der Session-State-Variablen für den schrittweisen Löschvorgang
+    if "delete_step" not in st.session_state:
+        st.session_state.delete_step = 0
 
-    Args:
-        table_choice_delete: Name der Tabelle
-        id_spalte_delete: Name der ID-Spalte
-        selected_id_to_delete: Wert der ID des zu löschenden Datensatzes
-    """
-    try:
-        # Prüfen, ob es sich um eine Tabelle mit bekannten Abhängigkeiten handelt
+    if "delete_steps_total" not in st.session_state:
+        st.session_state.delete_steps_total = 1  # Standardwert, wird später aktualisiert
+
+    if "delete_steps_info" not in st.session_state:
+        st.session_state.delete_steps_info = []  # Liste mit Informationen zu jedem Schritt
+
+    # Bestimme die Anzahl und Art der Löschschritte basierend auf der Tabelle
+    if st.session_state.delete_step == 0:
         if table_choice_delete == "ticket":
-            # Für Tickets müssen zuerst alle abhängigen Datensätze gelöscht werden
-            with engine.begin() as conn:
-                # 1. Ticket-Kommentare löschen
-                delete_comments_query = text("""
-                    DELETE FROM ticket_kommentar 
-                    WHERE ID_Ticket = :ticket_id
-                """)
-                conn.execute(delete_comments_query, {"ticket_id": selected_id_to_delete})
-
-                # 2. Ticket-Historie löschen
-                delete_history_query = text("""
-                    DELETE FROM ticket_historie 
-                    WHERE ID_Ticket = :ticket_id
-                """)
-                conn.execute(delete_history_query, {"ticket_id": selected_id_to_delete})
-
-                # 3. Ticket-Mitarbeiter-Zuordnungen löschen
-                delete_mitarbeiter_query = text("""
-                    DELETE FROM ticket_mitarbeiter 
-                    WHERE ID_Ticket = :ticket_id
-                """)
-                conn.execute(delete_mitarbeiter_query, {"ticket_id": selected_id_to_delete})
-
-                # 4. Ticket-Kategorie-Zuordnungen löschen
-                delete_kategorie_query = text("""
-                    DELETE FROM ticket_kategorie 
-                    WHERE ID_Ticket = :ticket_id
-                """)
-                conn.execute(delete_kategorie_query, {"ticket_id": selected_id_to_delete})
-
-                # 5. Schließlich das Ticket selbst löschen
-                delete_ticket_query = text("""
-                    DELETE FROM ticket 
-                    WHERE ID_Ticket = :ticket_id
-                """)
-                conn.execute(delete_ticket_query, {"ticket_id": selected_id_to_delete})
-
-                st.success(f"✅ Ticket #{selected_id_to_delete} wurde erfolgreich gelöscht!")
-
+            st.session_state.delete_steps_total = 5
+            st.session_state.delete_steps_info = [
+                {"name": "Ticket-Kommentare", "description": "Löscht alle Kommentare zu diesem Ticket"},
+                {"name": "Ticket-Historie", "description": "Löscht alle Historieneinträge zu diesem Ticket"},
+                {"name": "Ticket-Mitarbeiter-Zuordnungen", "description": "Löscht alle Mitarbeiterzuordnungen zu diesem Ticket"},
+                {"name": "Ticket-Kategorie-Zuordnungen", "description": "Löscht alle Kategoriezuordnungen zu diesem Ticket"},
+                {"name": "Ticket", "description": "Löscht das Ticket selbst"}
+            ]
         elif table_choice_delete == "mitarbeiter":
-
-
-            # Für Mitarbeiter müssen zuerst alle abhängigen Datensätze gelöscht werden
-            with engine.begin() as conn:
-                # 1. Ticket-Mitarbeiter-Zuordnungen löschen
-                delete_ticket_mitarbeiter_query = text("""
-                    DELETE FROM ticket_mitarbeiter 
-                    WHERE ID_Mitarbeiter = :mitarbeiter_id
-                """)
-                conn.execute(delete_ticket_mitarbeiter_query, {"mitarbeiter_id": selected_id_to_delete})
-
-                # 2. Ticket-Historie-Einträge aktualisieren (auf NULL setzen statt löschen)
-                update_historie_query = text("""
-                    UPDATE ticket_historie 
-                    SET Geändert_von = NULL
-                    WHERE Geändert_von = :mitarbeiter_id
-                """)
-                conn.execute(update_historie_query, {"mitarbeiter_id": selected_id_to_delete})
-
-                # 3. Tickets aktualisieren (auf NULL setzen statt löschen)
-                update_tickets_query = text("""
-                    UPDATE ticket 
-                    SET ID_Mitarbeiter = NULL
-                    WHERE ID_Mitarbeiter = :mitarbeiter_id
-                """)
-                conn.execute(update_tickets_query, {"mitarbeiter_id": selected_id_to_delete})
-
-                # 4. Kommentare aktualisieren (auf NULL setzen statt löschen)
-                update_kommentare_query = text("""
-                    UPDATE ticket_kommentar 
-                    SET ID_Mitarbeiter = NULL
-                    WHERE ID_Mitarbeiter = :mitarbeiter_id
-                """)
-                conn.execute(update_kommentare_query, {"mitarbeiter_id": selected_id_to_delete})
-
-                # 5. Schließlich den Mitarbeiter selbst löschen
-                delete_mitarbeiter_query = text("""
-                    DELETE FROM mitarbeiter 
-                    WHERE ID_Mitarbeiter = :mitarbeiter_id
-                """)
-                conn.execute(delete_mitarbeiter_query, {"mitarbeiter_id": selected_id_to_delete})
-
-                st.success(f"✅ Mitarbeiter mit ID {selected_id_to_delete} wurde erfolgreich gelöscht!")
-
+            st.session_state.delete_steps_total = 5
+            st.session_state.delete_steps_info = [
+                {"name": "Ticket-Mitarbeiter-Zuordnungen", "description": "Löscht alle Zuordnungen dieses Mitarbeiters zu Tickets"},
+                {"name": "Ticket-Historie-Einträge", "description": "Setzt Mitarbeiter-Referenzen in der Historie auf NULL"},
+                {"name": "Tickets", "description": "Setzt Mitarbeiter-Referenzen in Tickets auf NULL"},
+                {"name": "Kommentare", "description": "Setzt Mitarbeiter-Referenzen in Kommentaren auf NULL"},
+                {"name": "Mitarbeiter", "description": "Löscht den Mitarbeiter selbst"}
+            ]
         elif table_choice_delete == "kunde":
-            # Für Kunden müssen zuerst alle abhängigen Tickets aktualisiert werden
-            with engine.begin() as conn:
-                # 1. Tickets aktualisieren (auf NULL setzen statt löschen)
-                update_tickets_query = text("""
-                    UPDATE ticket 
-                    SET ID_Kunde = NULL
-                    WHERE ID_Kunde = :kunde_id
-                """)
-                conn.execute(update_tickets_query, {"kunde_id": selected_id_to_delete})
-
-                # 2. Schließlich den Kunden selbst löschen
-                delete_kunde_query = text("""
-                    DELETE FROM kunde 
-                    WHERE ID_Kunde = :kunde_id
-                """)
-                conn.execute(delete_kunde_query, {"kunde_id": selected_id_to_delete})
-
-                st.success(f"✅ Kunde mit ID {selected_id_to_delete} wurde erfolgreich gelöscht!")
-
+            st.session_state.delete_steps_total = 2
+            st.session_state.delete_steps_info = [
+                {"name": "Tickets", "description": "Setzt Kunden-Referenzen in Tickets auf NULL"},
+                {"name": "Kunde", "description": "Löscht den Kunden selbst"}
+            ]
         elif table_choice_delete == "kategorie":
-            # Für Kategorien müssen zuerst alle abhängigen Ticket-Kategorie-Zuordnungen gelöscht werden
-            with engine.begin() as conn:
-                # 1. Ticket-Kategorie-Zuordnungen löschen
-                delete_ticket_kategorie_query = text("""
-                    DELETE FROM ticket_kategorie 
-                    WHERE ID_Kategorie = :kategorie_id
-                """)
-                conn.execute(delete_ticket_kategorie_query, {"kategorie_id": selected_id_to_delete})
-
-                # 2. Schließlich die Kategorie selbst löschen
-                delete_kategorie_query = text("""
-                    DELETE FROM kategorie 
-                    WHERE ID_Kategorie = :kategorie_id
-                """)
-                conn.execute(delete_kategorie_query, {"kategorie_id": selected_id_to_delete})
-
-                st.success(f"✅ Kategorie mit ID {selected_id_to_delete} wurde erfolgreich gelöscht!")
-
+            st.session_state.delete_steps_total = 2
+            st.session_state.delete_steps_info = [
+                {"name": "Ticket-Kategorie-Zuordnungen", "description": "Löscht alle Zuordnungen dieser Kategorie zu Tickets"},
+                {"name": "Kategorie", "description": "Löscht die Kategorie selbst"}
+            ]
         elif table_choice_delete == "status":
-            # Für Status müssen zuerst alle abhängigen Tickets aktualisiert werden
-            with engine.begin() as conn:
-                # 1. Tickets aktualisieren (auf NULL setzen statt löschen)
-                update_tickets_query = text("""
-                    UPDATE ticket 
-                    SET ID_Status = NULL
-                    WHERE ID_Status = :status_id
-                """)
-                conn.execute(update_tickets_query, {"status_id": selected_id_to_delete})
-
-                # 2. Schließlich den Status selbst löschen
-                delete_status_query = text("""
-                    DELETE FROM status 
-                    WHERE ID_Status = :status_id
-                """)
-                conn.execute(delete_status_query, {"status_id": selected_id_to_delete})
-
-                st.success(f"✅ Status mit ID {selected_id_to_delete} wurde erfolgreich gelöscht!")
-
+            st.session_state.delete_steps_total = 2
+            st.session_state.delete_steps_info = [
+                {"name": "Tickets", "description": "Setzt Status-Referenzen in Tickets auf NULL"},
+                {"name": "Status", "description": "Löscht den Status selbst"}
+            ]
         elif table_choice_delete == "rolle":
-            # Für Rollen müssen zuerst alle abhängigen Mitarbeiter aktualisiert werden
-            with engine.begin() as conn:
-                # 1. Mitarbeiter aktualisieren (auf NULL setzen statt löschen)
-                update_mitarbeiter_query = text("""
-                    UPDATE mitarbeiter 
-                    SET ID_Rolle = NULL
-                    WHERE ID_Rolle = :rolle_id
-                """)
-                conn.execute(update_mitarbeiter_query, {"rolle_id": selected_id_to_delete})
-
-                # 2. Schließlich die Rolle selbst löschen
-                delete_rolle_query = text("""
-                    DELETE FROM rolle 
-                    WHERE ID_Rolle = :rolle_id
-                """)
-                conn.execute(delete_rolle_query, {"rolle_id": selected_id_to_delete})
-
-                st.success(f"✅ Rolle mit ID {selected_id_to_delete} wurde erfolgreich gelöscht!")
-
+            st.session_state.delete_steps_total = 2
+            st.session_state.delete_steps_info = [
+                {"name": "Mitarbeiter", "description": "Setzt Rollen-Referenzen bei Mitarbeitern auf NULL"},
+                {"name": "Rolle", "description": "Löscht die Rolle selbst"}
+            ]
         else:
-            # Für andere Tabellen den normalen Löschvorgang durchführen
-            with engine.begin() as conn:
-                query = text(f"DELETE FROM {table_choice_delete} WHERE {id_spalte_delete} = :value")
-                result = conn.execute(query, {"value": selected_id_to_delete})
+            # Für andere Tabellen nur ein Schritt
+            st.session_state.delete_steps_total = 1
+            st.session_state.delete_steps_info = [
+                {"name": table_choice_delete, "description": f"Löscht den Datensatz aus {table_choice_delete}"}
+            ]
 
-                if result.rowcount > 0:
-                    st.success(f"✅ Datensatz mit {id_spalte_delete} = {selected_id_to_delete} gelöscht.")
-                else:
-                    st.warning(f"⚠️ Kein Datensatz gelöscht. Möglicherweise wurde er bereits entfernt.")
+    # Fortschrittsanzeige
+    progress_percentage = (st.session_state.delete_step / st.session_state.delete_steps_total) * 100
+    st.progress(progress_percentage / 100)
+    st.write(f"Schritt {st.session_state.delete_step + 1} von {st.session_state.delete_steps_total}")
+
+    # Wenn alle Schritte abgeschlossen sind, zurücksetzen und Erfolg melden
+    if st.session_state.delete_step >= st.session_state.delete_steps_total:
+        st.success(f"✅ Alle Löschschritte für {table_choice_delete} mit ID {selected_id_to_delete} wurden erfolgreich abgeschlossen!")
 
         # Daten neu laden
         df_delete = pd.read_sql(f"SELECT * FROM {table_choice_delete}", con=engine)
         st.write("Aktualisierte Tabellendaten:")
         st.dataframe(df_delete)
 
+        # Session-State zurücksetzen
+        st.session_state.delete_step = 0
+        return True
+
+    # Aktuellen Schritt anzeigen
+    current_step_info = st.session_state.delete_steps_info[st.session_state.delete_step]
+    st.subheader(f"Schritt {st.session_state.delete_step + 1}: {current_step_info['name']}")
+    st.info(current_step_info['description'])
+
+    # Bestätigungsdialog für den aktuellen Schritt
+    st.warning(f"⚠️ Möchten Sie diesen Schritt ausführen? Diese Aktion kann nicht rückgängig gemacht werden!")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("✅ Ja, ausführen", key=f"confirm_step_{st.session_state.delete_step}"):
+            # Führe den aktuellen Löschschritt aus
+            success = execute_delete_step(
+                table_choice_delete,
+                id_spalte_delete,
+                selected_id_to_delete,
+                st.session_state.delete_step
+            )
+
+            if success:
+                st.success(f"✅ Schritt {st.session_state.delete_step + 1} erfolgreich ausgeführt!")
+                # Zum nächsten Schritt
+                st.session_state.delete_step += 1
+                st.rerun()
+            else:
+                st.error("❌ Fehler beim Ausführen des Schritts!")
+                # Schritt nicht erhöhen, damit der Benutzer es erneut versuchen kann
+
+    with col2:
+        if st.button("❌ Überspringen", key=f"skip_step_{st.session_state.delete_step}"):
+            st.info(f"Schritt {st.session_state.delete_step + 1} übersprungen.")
+            # Zum nächsten Schritt ohne Ausführung
+            st.session_state.delete_step += 1
+            st.rerun()
+
+    # Option zum Abbrechen des gesamten Löschvorgangs
+    if st.button("🛑 Gesamten Löschvorgang abbrechen", key="cancel_all_delete"):
+        st.warning("Löschvorgang abgebrochen.")
+        # Session-State zurücksetzen
+        st.session_state.delete_step = 0
+        return False
+
+    return None  # Noch nicht abgeschlossen
+
+# Funktion zum Ausführen eines einzelnen Löschschritts
+def execute_delete_step(table_choice_delete, id_spalte_delete, selected_id_to_delete, step):
+    """
+    Führt einen einzelnen Löschschritt aus.
+
+    Args:
+        table_choice_delete: Name der Tabelle
+        id_spalte_delete: Name der ID-Spalte
+        selected_id_to_delete: Wert der ID des zu löschenden Datensatzes
+        step: Aktueller Schritt im Löschvorgang
+
+    Returns:
+        bool: True bei Erfolg, False bei Fehler
+    """
+    from d import engine
+
+    try:
+        with engine.begin() as conn:
+            # Ticket-Löschschritte
+            if table_choice_delete == "ticket":
+                if step == 0:  # Ticket-Kommentare
+                    query = text("""
+                        DELETE FROM ticket_kommentar 
+                        WHERE ID_Ticket = :ticket_id
+                    """)
+                    conn.execute(query, {"ticket_id": selected_id_to_delete})
+                elif step == 1:  # Ticket-Historie
+                    query = text("""
+                        DELETE FROM ticket_historie 
+                        WHERE ID_Ticket = :ticket_id
+                    """)
+                    conn.execute(query, {"ticket_id": selected_id_to_delete})
+                elif step == 2:  # Ticket-Mitarbeiter-Zuordnungen
+                    query = text("""
+                        DELETE FROM ticket_mitarbeiter 
+                        WHERE ID_Ticket = :ticket_id
+                    """)
+                    conn.execute(query, {"ticket_id": selected_id_to_delete})
+                elif step == 3:  # Ticket-Kategorie-Zuordnungen
+                    query = text("""
+                        DELETE FROM ticket_kategorie 
+                        WHERE ID_Ticket = :ticket_id
+                    """)
+                    conn.execute(query, {"ticket_id": selected_id_to_delete})
+                elif step == 4:  # Ticket selbst
+                    query = text("""
+                        DELETE FROM ticket 
+                        WHERE ID_Ticket = :ticket_id
+                    """)
+                    conn.execute(query, {"ticket_id": selected_id_to_delete})
+
+            # Mitarbeiter-Löschschritte
+            elif table_choice_delete == "mitarbeiter":
+                if step == 0:  # Ticket-Mitarbeiter-Zuordnungen
+                    query = text("""
+                        DELETE FROM ticket_mitarbeiter 
+                        WHERE ID_Mitarbeiter = :mitarbeiter_id
+                    """)
+                    conn.execute(query, {"mitarbeiter_id": selected_id_to_delete})
+                elif step == 1:  # Ticket-Historie-Einträge
+                    query = text("""
+                        UPDATE ticket_historie 
+                        SET Geändert_von = NULL
+                        WHERE Geändert_von = :mitarbeiter_id
+                    """)
+                    conn.execute(query, {"mitarbeiter_id": selected_id_to_delete})
+                elif step == 2:  # Tickets
+                    query = text("""
+                        UPDATE ticket 
+                        SET ID_Mitarbeiter = NULL
+                        WHERE ID_Mitarbeiter = :mitarbeiter_id
+                    """)
+                    conn.execute(query, {"mitarbeiter_id": selected_id_to_delete})
+                elif step == 3:  # Kommentare
+                    query = text("""
+                        UPDATE ticket_kommentar 
+                        SET ID_Mitarbeiter = NULL
+                        WHERE ID_Mitarbeiter = :mitarbeiter_id
+                    """)
+                    conn.execute(query, {"mitarbeiter_id": selected_id_to_delete})
+                elif step == 4:  # Mitarbeiter selbst
+                    query = text("""
+                        DELETE FROM mitarbeiter 
+                        WHERE ID_Mitarbeiter = :mitarbeiter_id
+                    """)
+                    conn.execute(query, {"mitarbeiter_id": selected_id_to_delete})
+
+            # Kunden-Löschschritte
+            elif table_choice_delete == "kunde":
+                if step == 0:  # Tickets
+                    query = text("""
+                        UPDATE ticket 
+                        SET ID_Kunde = NULL
+                        WHERE ID_Kunde = :kunde_id
+                    """)
+                    conn.execute(query, {"kunde_id": selected_id_to_delete})
+                elif step == 1:  # Kunde selbst
+                    query = text("""
+                        DELETE FROM kunde 
+                        WHERE ID_Kunde = :kunde_id
+                    """)
+                    conn.execute(query, {"kunde_id": selected_id_to_delete})
+
+            # Kategorie-Löschschritte
+            elif table_choice_delete == "kategorie":
+                if step == 0:  # Ticket-Kategorie-Zuordnungen
+                    query = text("""
+                        DELETE FROM ticket_kategorie 
+                        WHERE ID_Kategorie = :kategorie_id
+                    """)
+                    conn.execute(query, {"kategorie_id": selected_id_to_delete})
+                elif step == 1:  # Kategorie selbst
+                    query = text("""
+                        DELETE FROM kategorie 
+                        WHERE ID_Kategorie = :kategorie_id
+                    """)
+                    conn.execute(query, {"kategorie_id": selected_id_to_delete})
+
+            # Status-Löschschritte
+            elif table_choice_delete == "status":
+                if step == 0:  # Tickets
+                    query = text("""
+                        UPDATE ticket 
+                        SET ID_Status = NULL
+                        WHERE ID_Status = :status_id
+                    """)
+                    conn.execute(query, {"status_id": selected_id_to_delete})
+                elif step == 1:  # Status selbst
+                    query = text("""
+                        DELETE FROM status 
+                        WHERE ID_Status = :status_id
+                    """)
+                    conn.execute(query, {"status_id": selected_id_to_delete})
+
+            # Rollen-Löschschritte
+            elif table_choice_delete == "rolle":
+                if step == 0:  # Mitarbeiter
+                    query = text("""
+                        UPDATE mitarbeiter 
+                        SET ID_Rolle = NULL
+                        WHERE ID_Rolle = :rolle_id
+                    """)
+                    conn.execute(query, {"rolle_id": selected_id_to_delete})
+                elif step == 1:  # Rolle selbst
+                    query = text("""
+                        DELETE FROM rolle 
+                        WHERE ID_Rolle = :rolle_id
+                    """)
+                    conn.execute(query, {"rolle_id": selected_id_to_delete})
+
+            # Für andere Tabellen einfacher Löschvorgang
+            else:
+                query = text(f"DELETE FROM {table_choice_delete} WHERE {id_spalte_delete} = :value")
+                conn.execute(query, {"value": selected_id_to_delete})
+
         return True
 
     except Exception as e:
-        st.error("❌ Fehler beim Löschen:")
-        st.exception(e)
+        st.error(f"❌ Fehler beim Ausführen des Schritts: {str(e)}")
 
         # Detaillierte Fehlermeldung für Fremdschlüsselprobleme
         error_str = str(e)
@@ -214,18 +300,17 @@ def enhanced_delete_function(table_choice_delete, id_spalte_delete, selected_id_
             **Fremdschlüssel-Constraint-Fehler erkannt!**
             
             Der Datensatz kann nicht gelöscht werden, da er noch von anderen Tabellen referenziert wird.
-            Bitte überprüfen Sie alle abhängigen Tabellen und aktualisieren Sie die enhanced_delete_function.
+            Bitte überprüfen Sie alle abhängigen Tabellen.
             """)
 
             # Versuche, die betroffene Tabelle zu identifizieren
             if "CONSTRAINT" in error_str and "FOREIGN KEY" in error_str:
                 st.error(f"""
                 Fehlerdetails: {error_str}
-                
-                Bitte fügen Sie eine spezielle Behandlung für diese Tabelle in der enhanced_delete_function hinzu.
                 """)
 
         return False
+
 
 # Datenbankverwaltung anzeigen
 def show_database_management():
@@ -575,7 +660,7 @@ def show_database_management():
 
         # Session-State für den Löschvorgang initialisieren
         if "delete_state" not in st.session_state:
-            st.session_state.delete_state = "initial"  # Mögliche Zustände: initial, confirm, executing
+            st.session_state.delete_state = "initial"  # Mögliche Zustände: initial, confirm, executing, step_by_step
 
         if "delete_table" not in st.session_state:
             st.session_state.delete_table = None
@@ -589,126 +674,97 @@ def show_database_management():
         if "delete_df" not in st.session_state:
             st.session_state.delete_df = pd.DataFrame()
 
-        if "delete_option" not in st.session_state:
-            st.session_state.delete_option = "Standard-Löschung"
-
         try:
-            tabellen = inspector.get_table_names()
-            table_choice_delete = st.selectbox("Tabelle wählen (Löschen)", tabellen, key="delete_table_select")
-            spalten_delete = get_columns(table_choice_delete)
-            id_spalte_delete = st.selectbox("Primärschlüsselspalte", spalten_delete, key="primary_column_delete_select")
+            # Wenn wir uns im schrittweisen Löschmodus befinden, zeige nur den schrittweisen Löschprozess an
+            if st.session_state.delete_state == "step_by_step":
+                # Zeige Informationen zum aktuellen Datensatz
+                st.info(f"Schrittweise Löschung für {st.session_state.delete_table} mit ID {st.session_state.delete_id_value}")
 
-            # Daten laden Button
-            if st.button("🔄 Daten zum Löschen laden", key="load_delete_data"):
-                df_delete = pd.read_sql(f"SELECT * FROM {table_choice_delete}", con=engine)
-                st.session_state.delete_df = df_delete
-                st.session_state.delete_table = table_choice_delete
-                st.session_state.delete_id_column = id_spalte_delete
-                st.session_state.delete_state = "initial"
-                st.rerun()  # Wichtig: Seite neu laden, um UI-Elemente korrekt anzuzeigen
+                # Führe die schrittweise Löschung durch
+                result = step_by_step_delete_function(
+                    st.session_state.delete_table,
+                    st.session_state.delete_id_column,
+                    st.session_state.delete_id_value
+                )
 
-            # Wenn Daten geladen wurden, zeige sie an
-            if not st.session_state.delete_df.empty:
-                st.dataframe(st.session_state.delete_df, use_container_width=True)
+                # Wenn die Löschung abgeschlossen oder abgebrochen wurde, zurück zum Ausgangszustand
+                if result is not None:  # True = abgeschlossen, False = abgebrochen
+                    st.session_state.delete_state = "initial"
+                    # Daten neu laden
+                    df_delete = pd.read_sql(f"SELECT * FROM {st.session_state.delete_table}", con=engine)
+                    st.session_state.delete_df = df_delete
+                    st.rerun()
 
-                # Nur wenn wir nicht im Bestätigungsmodus sind, zeige die Auswahlfelder
-                if st.session_state.delete_state == "initial":
-                    # ID zum Löschen auswählen
-                    selected_id_to_delete = st.selectbox(
-                        f"Datensatz zum Löschen auswählen ({st.session_state.delete_id_column})",
-                        st.session_state.delete_df[st.session_state.delete_id_column].tolist(),
-                        key="delete_id_select"
-                    )
+                # Button zum Zurückkehren zur Tabellenauswahl
+                if st.button("🔙 Zurück zur Tabellenauswahl"):
+                    st.session_state.delete_state = "initial"
+                    # Session-State für schrittweise Löschung zurücksetzen
+                    if "delete_step" in st.session_state:
+                        del st.session_state.delete_step
+                    if "delete_steps_total" in st.session_state:
+                        del st.session_state.delete_steps_total
+                    if "delete_steps_info" in st.session_state:
+                        del st.session_state.delete_steps_info
+                    st.rerun()
 
-                    # Löschoptionen
-                    delete_option = st.radio(
-                        "Löschmethode wählen:",
-                        ["Standard-Löschung", "Erweiterte Löschung (mit Abhängigkeiten)"],
-                        key="delete_option_radio",
-                        help="Standard-Löschung versucht nur den ausgewählten Datensatz zu löschen. Erweiterte Löschung löscht auch abhängige Datensätze."
-                    )
+            # Normaler Löschmodus (Auswahl und Bestätigung)
+            else:
+                tabellen = inspector.get_table_names()
+                table_choice_delete = st.selectbox("Tabelle wählen (Löschen)", tabellen, key="delete_table_select")
+                spalten_delete = get_columns(table_choice_delete)
+                id_spalte_delete = st.selectbox("Primärschlüsselspalte", spalten_delete, key="primary_column_delete_select")
 
-                    # Lösch-Button
-                    if st.button("🗑️ Datensatz löschen", key="delete_record_button"):
-                        # Werte speichern und in den Bestätigungsmodus wechseln
-                        st.session_state.delete_id_value = selected_id_to_delete
-                        st.session_state.delete_option = delete_option
-                        st.session_state.delete_state = "confirm"
-                        st.rerun()  # Wichtig: Seite neu laden, um Bestätigungsdialog anzuzeigen
+                # Daten laden Button
+                if st.button("🔄 Daten zum Löschen laden", key="load_delete_data"):
+                    df_delete = pd.read_sql(f"SELECT * FROM {table_choice_delete}", con=engine)
+                    st.session_state.delete_df = df_delete
+                    st.session_state.delete_table = table_choice_delete
+                    st.session_state.delete_id_column = id_spalte_delete
+                    st.session_state.delete_state = "initial"
+                    st.rerun()
 
-                # Bestätigungsdialog anzeigen
-                elif st.session_state.delete_state == "confirm":
-                    st.warning(f"⚠️ Sind Sie sicher, dass Sie den Datensatz mit {st.session_state.delete_id_column} = {st.session_state.delete_id_value} löschen möchten?")
+                # Wenn Daten geladen wurden, zeige sie an
+                if not st.session_state.delete_df.empty:
+                    st.dataframe(st.session_state.delete_df, use_container_width=True)
 
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        if st.button("✅ Ja, löschen", key="confirm_delete_button"):
-                            st.session_state.delete_state = "executing"
-                            st.rerun()  # Wichtig: Seite neu laden, um Löschvorgang auszuführen
-                    with col2:
-                        if st.button("❌ Abbrechen", key="cancel_delete_button"):
-                            st.session_state.delete_state = "initial"
-                            st.rerun()  # Zurück zum Ausgangszustand
-
-                # Löschvorgang ausführen
-                elif st.session_state.delete_state == "executing":
-                    if st.session_state.delete_option == "Standard-Löschung":
-                        try:
-                            with engine.begin() as conn:
-                                query = text(f"DELETE FROM {st.session_state.delete_table} WHERE {st.session_state.delete_id_column} = :value")
-                                result = conn.execute(query, {"value": st.session_state.delete_id_value})
-
-                                if result.rowcount > 0:
-                                    st.success(f"✅ Datensatz mit {st.session_state.delete_id_column} = {st.session_state.delete_id_value} gelöscht.")
-                                    # Daten neu laden
-                                    df_delete = pd.read_sql(f"SELECT * FROM {st.session_state.delete_table}", con=engine)
-                                    st.session_state.delete_df = df_delete
-                                    st.write("Aktualisierte Tabellendaten:")
-                                    st.dataframe(df_delete)
-                                    # Zurück zum Ausgangszustand
-                                    st.session_state.delete_state = "initial"
-                                else:
-                                    st.warning(f"⚠️ Kein Datensatz gelöscht. Möglicherweise wurde er bereits entfernt.")
-                                    st.session_state.delete_state = "initial"
-
-                        except Exception as e:
-                            st.error("❌ Fehler beim Löschen:")
-                            st.exception(e)
-
-                            # Detaillierte Fehlermeldung für Fremdschlüsselprobleme
-                            error_str = str(e)
-                            if "foreign key constraint fails" in error_str.lower():
-                                st.error("""
-                                **Fremdschlüssel-Constraint-Fehler erkannt!**
-                                
-                                Der Datensatz kann nicht gelöscht werden, da er noch von anderen Tabellen referenziert wird.
-                                Bitte verwenden Sie die 'Erweiterte Löschung' Option oder löschen Sie zuerst alle abhängigen Datensätze.
-                                """)
-
-                            # Zurück zum Ausgangszustand nach Fehler
-                            st.session_state.delete_state = "initial"
-                    else:
-                        # Erweiterte Löschung mit Abhängigkeiten
-                        success = enhanced_delete_function(
-                            st.session_state.delete_table,
-                            st.session_state.delete_id_column,
-                            st.session_state.delete_id_value
+                    # Nur wenn wir nicht im Bestätigungsmodus sind, zeige die Auswahlfelder
+                    if st.session_state.delete_state == "initial":
+                        # ID zum Löschen auswählen
+                        selected_id_to_delete = st.selectbox(
+                            f"Datensatz zum Löschen auswählen ({st.session_state.delete_id_column})",
+                            st.session_state.delete_df[st.session_state.delete_id_column].tolist(),
+                            key="delete_id_select"
                         )
 
-                        if success:
-                            # Daten neu laden
-                            df_delete = pd.read_sql(f"SELECT * FROM {st.session_state.delete_table}", con=engine)
-                            st.session_state.delete_df = df_delete
-                            st.write("Aktualisierte Tabellendaten:")
-                            st.dataframe(df_delete)
+                        # Lösch-Button
+                        if st.button("🗑️ Datensatz löschen", key="delete_record_button"):
+                            # Werte speichern und in den Bestätigungsmodus wechseln
+                            st.session_state.delete_id_value = selected_id_to_delete
+                            st.session_state.delete_state = "confirm"
+                            st.rerun()
 
-                        # Zurück zum Ausgangszustand
-                        st.session_state.delete_state = "initial"
-            else:
-                st.info("Bitte laden Sie zuerst Daten zum Löschen.")
+                    # Bestätigungsdialog anzeigen
+                    elif st.session_state.delete_state == "confirm":
+                        st.warning(f"⚠️ Sind Sie sicher, dass Sie den Datensatz mit {st.session_state.delete_id_column} = {st.session_state.delete_id_value} löschen möchten?")
+
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            if st.button("✅ Ja, schrittweise löschen", key="confirm_step_by_step_delete"):
+                                st.session_state.delete_state = "step_by_step"
+                                # Session-State für schrittweise Löschung initialisieren
+                                st.session_state.delete_step = 0
+                                st.rerun()
+
+                        with col2:
+                            if st.button("❌ Abbrechen", key="cancel_delete_button"):
+                                st.session_state.delete_state = "initial"
+                                st.rerun()
+                else:
+                    st.info("Bitte laden Sie zuerst Daten zum Löschen.")
 
         except Exception as e:
             st.error("❌ Fehler beim Laden der Daten zum Löschen:")
             st.exception(e)
             # Zurück zum Ausgangszustand nach Fehler
             st.session_state.delete_state = "initial"
+
