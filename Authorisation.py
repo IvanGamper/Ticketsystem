@@ -10,7 +10,7 @@ import streamlit as st
 
 # Hilfsfunktion: Spaltentypen einer Tabelle
 def get_column_types(table):
-    from d import inspector
+    from Main import inspector
     try:
         return {col["name"]: str(col["type"]) for col in inspector.get_columns(table)}
     except:
@@ -40,7 +40,7 @@ def get_searchable_columns(table):
 
 # Hilfsfunktion: Tabelle durchsuchen
 def search_table(table_name, search_term, search_columns=None, exact_match=False, case_sensitive=False):
-    from d import engine
+    from Main import engine
     try:
         if not search_term:
             return pd.DataFrame()
@@ -134,7 +134,7 @@ def generate_temp_password(length=12):
 # Authentifizierungsfunktion
 def authenticate_user(username_or_email, password):
 
-    from d import engine
+    from Main import engine
     try:
         # Kleine Verzögerung als Schutz vor Brute-Force-Angriffen
         time.sleep(0.5)
@@ -192,7 +192,7 @@ def authenticate_user(username_or_email, password):
 
 # Funktion zur Passwort-Wiederherstellung
 def reset_password(email):
-    from d import engine
+    from Main import engine
     try:
         # Benutzer in der Datenbank suchen
         query = text("""
@@ -247,7 +247,7 @@ def reset_password(email):
 
 # Funktion zum Ändern des Passworts
 def change_password(user_id, new_password):
-    from d import engine
+    from Main import engine
     """Ändert das Passwort eines Benutzers."""
     try:
         # Salt generieren und neues Passwort hashen
@@ -280,7 +280,7 @@ def change_password(user_id, new_password):
 
 # Passwort-Wiederherstellungsseite anzeigen
 def show_password_reset_page():
-    from d import engine
+    from Main import engine
     st.title("🔑 Passwort zurücksetzen")
 
     col1, col2 = st.columns([1, 1])
@@ -327,7 +327,7 @@ def show_password_reset_page():
 
 # Passwortänderungsseite anzeigen
 def show_password_change_page():
-    from d import engine
+    from Main import engine
     st.title("🔐 Passwort ändern")
 
     col1, col2 = st.columns([1, 1])
@@ -363,7 +363,7 @@ def show_password_change_page():
 
 # Login-Seite anzeigen
 def show_login_page():
-    from d import engine
+    from Main import engine
     st.title("🔐 Login")
 
     col1, col2 = st.columns([1, 1])

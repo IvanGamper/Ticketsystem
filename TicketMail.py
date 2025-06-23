@@ -62,8 +62,8 @@ def send_email(smtp_server, smtp_port, email, app_password, to_email, subject, b
 
 def show_email_tab():
 
-    from d import engine
-    from t import log_ticket_change
+    from Main import engine
+    from Ticket import log_ticket_change
 
     """
     Zeigt das EMAIL-Tab mit E-Mail-Versendungsfunktionalität an

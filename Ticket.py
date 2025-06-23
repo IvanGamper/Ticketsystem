@@ -3,7 +3,7 @@ from sqlalchemy import text
 import time
 
 def create_ticket_relations(ticket_id, ID_Mitarbeiter, kategorie_id=1):
-    from d import engine
+    from Main import engine
     try:
         with engine.begin() as conn:
             # Eintrag in ticket_mitarbeiter
@@ -39,7 +39,7 @@ def create_ticket_relations(ticket_id, ID_Mitarbeiter, kategorie_id=1):
 # Diese Funktion fügt einen Lösch-Button zum Ticket-Details-Bereich hinzu
 def add_ticket_delete_button(ticket_id):
 
-    from d import engine
+    from Main import engine
 
     """
     Fügt einen Lösch-Button für ein Ticket hinzu und implementiert die Löschlogik.
@@ -105,7 +105,7 @@ def add_ticket_delete_button(ticket_id):
 # Hilfsfunktion: Spaltennamen einer Tabelle
 def get_columns(table):
 
-    from d import engine, inspector
+    from Main import engine, inspector
 
     try:
         return [col["name"] for col in inspector.get_columns(table)]
@@ -115,7 +115,7 @@ def get_columns(table):
 #Hilfsfunktion Historie
 def log_ticket_change(ticket_id, feldname, alter_wert, neuer_wert, mitarbeiter_id):
 
-    from d import engine
+    from Main import engine
 
     # Typkonvertierung für den Vergleich
     alter_wert_str = str(alter_wert) if alter_wert is not None else ""

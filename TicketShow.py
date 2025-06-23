@@ -2,14 +2,14 @@ import altair as alt
 import streamlit as st
 import pandas as pd
 from sqlalchemy import text
-from a import (generate_salt, hash_password)
-from t1 import show_email_tab
+from Authorisation import (generate_salt, hash_password)
+from TicketMail import show_email_tab
 
 #Ticketsystem anzeigen
 def show_ticket_system():
-    from t1 import show_email_inbox_tab
+    from TicketMail import show_email_inbox_tab
 
-    from d import engine
+    from Main import engine
     st.title("🎫 Ticketsystem")
 
     # Tabs für verschiedene Funktionen
@@ -48,7 +48,7 @@ def show_ticket_system():
 
 # Ticketübersicht anzeigen
 def show_ticket_overview():
-    from d import engine
+    from Main import engine
     st.subheader("📋 Ticketübersicht")
 
     # Suchfunktion
@@ -177,8 +177,8 @@ def show_ticket_overview():
 
 # Ticket-Bearbeitungstab anzeigen
 def show_ticket_edit_tab():
-    from t import log_ticket_change
-    from d import engine
+    from Ticket import log_ticket_change
+    from Main import engine
     st.subheader("✏️ Ticket bearbeiten")
 
     # Alle Tickets laden für die Auswahl
@@ -589,7 +589,7 @@ def show_ticket_edit_tab():
 
 # Ticket-Details anzeigen
 def show_ticket_details(ticket_id):
-    from d import engine
+    from Main import engine
     # Ticket-Details abrufen
     query = """
     SELECT t.ID_Ticket, t.Titel, t.Beschreibung, t.Priorität, 
@@ -722,7 +722,7 @@ def show_ticket_details(ticket_id):
 
 # Ticket-Statistiken anzeigen
 def show_ticket_statistics():
-    from d import engine
+    from Main import engine
     st.subheader("📊 Ticket-Statistiken")
 
     # Statistiken abrufen
@@ -807,8 +807,8 @@ def show_ticket_statistics():
 
 # Neues Ticket-Formular anzeigen
 def show_new_ticket_form():
-    from t import create_ticket_relations
-    from d import engine
+    from Ticket import create_ticket_relations
+    from Main import engine
     st.subheader("➕ Neues Ticket erstellen")
 
     # Formular zum Erstellen eines neuen Tickets
@@ -888,7 +888,7 @@ def show_new_ticket_form():
 
 # Einstellungen anzeigen
 def show_settings():
-    from d import engine
+    from Main import engine
     st.subheader("⚙️ Einstellungen")
 
     # Tabs für verschiedene Einstellungen
@@ -1049,5 +1049,3 @@ def show_settings():
                     except Exception as e:
                         st.error(f"Fehler beim Hinzufügen des Status: {str(e)}")
 
-
-# Hilfsfunktion: Automatische Einträge in ticket_mitarbeiter und ticket_kategorie

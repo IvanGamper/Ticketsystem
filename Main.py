@@ -1,10 +1,10 @@
 import streamlit as st
 from sqlalchemy import create_engine, text, inspect
-from a import (show_password_reset_page, show_password_change_page, show_login_page)
-from t import (get_columns)
-from d1 import (show_database_management)
+from Authorisation import (show_password_reset_page, show_password_change_page, show_login_page)
+from Ticket import (get_columns)
+from Datenbanken import (show_database_management)
 
-from t2 import show_ticket_system
+from TicketShow import show_ticket_system
 
 # DB-Konfiguration
 DB_USER = "root"

@@ -12,7 +12,7 @@ import random
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from a import (
+from Authorisation import (
     authenticate_user,
     generate_salt,
     hash_password,
@@ -24,7 +24,7 @@ from a import (
     show_password_change_page,
     show_login_page
 )
-from t import (
+from Ticket import (
     add_ticket_delete_button,
     enhanced_delete_function,
     get_columns,

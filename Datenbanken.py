@@ -1,14 +1,14 @@
 import pandas as pd
 import streamlit as st
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import text
 from datetime import datetime
-from a import (generate_salt, hash_password, get_searchable_columns, search_table, get_column_types)
-from t import (create_ticket_relations, get_columns)
+from Authorisation import (generate_salt, hash_password, get_searchable_columns, search_table, get_column_types)
+from Ticket import (create_ticket_relations, get_columns)
 
 # Verbesserte Löschfunktion mit schrittweiser Bestätigung
 def step_by_step_delete_function(table_choice_delete, id_spalte_delete, selected_id_to_delete):
 
-    from d import engine
+    from Main import engine
 
     # Initialisierung der Session-State-Variablen für den schrittweisen Löschvorgang
     if "delete_step" not in st.session_state:
@@ -147,7 +147,7 @@ def execute_delete_step(table_choice_delete, id_spalte_delete, selected_id_to_de
     Returns:
         bool: True bei Erfolg, False bei Fehler
     """
-    from d import engine
+    from Main import engine
 
     try:
         with engine.begin() as conn:
@@ -313,7 +313,7 @@ def execute_delete_step(table_choice_delete, id_spalte_delete, selected_id_to_de
 
 # Datenbankverwaltung anzeigen
 def show_database_management():
-    from d import engine, inspector
+    from Main import engine, inspector
     st.title("🛠️ Datenbankverwaltung")
 
     # Tabs
