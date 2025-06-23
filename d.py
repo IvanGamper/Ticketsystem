@@ -1,9 +1,11 @@
 import streamlit as st
 from sqlalchemy import create_engine, text, inspect
-
-from a import (search_table, get_searchable_columns, get_column_types, generate_salt, hash_password, show_password_reset_page, show_password_change_page, show_login_page)
-from t import (show_ticket_system, create_ticket_relations, get_columns)
+from a import (show_password_reset_page, show_password_change_page, show_login_page)
+from t import (get_columns)
 from d1 import (show_database_management)
+
+from t2 import show_ticket_system
+
 # DB-Konfiguration
 DB_USER = "root"
 DB_PASSWORD = "Xyz1343!!!"
