@@ -1,3 +1,4 @@
+from imap_tools import MailBox
 import altair as alt
 import streamlit as st
 import pandas as pd
@@ -39,7 +40,14 @@ def show_ticket_system():
 
     # Tab: EMAIL
     with ticket_tabs[5]:
+        st.subheader("📧 E-Mail")
+
+    email_mode = st.radio("E-Mail-Funktion wählen:", ["📧 E-Mail senden", "📥 E-Mail empfangen"])
+
+    if email_mode == "📧 E-Mail senden":
         show_email_tab()
+    elif email_mode == "📥 E-Mail empfangen":
+        show_email_inbox_tab()
 
 # Ticketübersicht anzeigen
 def show_ticket_overview():
@@ -1075,6 +1083,25 @@ def show_settings():
                     except Exception as e:
                         st.error(f"Fehler beim Hinzufügen des Status: {str(e)}")
 
+def fetch_emails(email, password, imap_server="imap.gmail.com"):
+    """
+    Holt die letzten 5 E-Mails aus dem Posteingang
+    """
+    try:
+        with MailBox(imap_server).login(email, password, initial_folder="INBOX") as mailbox:
+            messages = mailbox.fetch(limit=10, reverse=True)
+            emails = []
+            for msg in messages:
+                emails.append({
+                    "Von": msg.from_,
+                    "Betreff": msg.subject,
+                    "Datum": msg.date.strftime("%d.%m.%Y %H:%M"),
+                    "Nachricht": msg.text or msg.html,
+                })
+            return emails
+    except Exception as e:
+        return f"Fehler beim Abrufen der E-Mails: {str(e)}"
+
 # E-Mail-Funktionen
 def send_email(smtp_server, smtp_port, email, app_password, to_email, subject, body, use_ssl=True):
     """
@@ -1275,6 +1302,31 @@ Ihr Support-Team"""
         - **Yahoo:** smtp.mail.yahoo.com, Port 587
         - Konsultieren Sie die Dokumentation Ihres E-Mail-Anbieters für spezifische Einstellungen
         """)
+
+def show_email_inbox_tab():
+    st.subheader("📥 E-Mail empfangen")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        email = st.text_input("E-Mail-Adresse (IMAP-fähig)")
+    with col2:
+        password = st.text_input("App-Passwort", type="password")
+
+    imap_server = st.text_input("IMAP-Server", value="imap.gmail.com", help="z.B. imap.gmail.com für Gmail")
+
+    if st.button("📬 E-Mails abrufen"):
+        with st.spinner("E-Mails werden abgerufen..."):
+            emails = fetch_emails(email, password, imap_server)
+        if isinstance(emails, str):  # Fehlertext
+            st.error(emails)
+        else:
+            if not emails:
+                st.info("Keine E-Mails gefunden.")
+            for i, mail in enumerate(emails, 1):
+                with st.expander(f"{i}. {mail['Betreff']} ({mail['Datum']})"):
+                    st.markdown(f"**Von:** {mail['Von']}")
+                    st.markdown("---")
+                    st.text(mail['Nachricht'])
 
 # Diese Funktion fügt einen Lösch-Button zum Ticket-Details-Bereich hinzu
 def add_ticket_delete_button(ticket_id):
