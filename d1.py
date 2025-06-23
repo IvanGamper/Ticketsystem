@@ -311,7 +311,6 @@ def execute_delete_step(table_choice_delete, id_spalte_delete, selected_id_to_de
 
         return False
 
-
 # Datenbankverwaltung anzeigen
 def show_database_management():
     from d import engine, inspector
