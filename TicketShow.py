@@ -3,31 +3,16 @@ import streamlit as st
 import pandas as pd
 from sqlalchemy import text
 from Authorisation import (generate_salt, hash_password)
-from TicketMail import show_email_tab
-from Ticket import add_ticket_delete_button
-from Datenbanken import step_by_step_delete_function
 
-def add_ticket_delete_button(ticket_id):
-    """
-    Fügt einen Lösch-Button für ein Ticket hinzu und initiiert die schrittweise Löschlogik.
-    Args:
-        ticket_id: Die ID des zu löschenden Tickets.
-    """
-    # Lösch-Button mit Warnfarbe
-    col1, col2 = st.columns([3, 1])
-    with col2:
-        delete_button = st.button("🗑️ Ticket löschen", type="primary",
-                                  use_container_width=True, key=f"delete_ticket_{ticket_id}")
 
-    # Wenn der Lösch-Button geklickt wurde
-    if delete_button:
-        # Store information in session state to trigger step-by-step deletion
-        st.session_state.delete_state = "step_by_step"  # Indicate that step-by-step deletion should start
-        st.session_state.delete_table = "ticket"
-        st.session_state.delete_id_column = "ID_Ticket"
-        st.session_state.delete_id_value = ticket_id
-        st.session_state.delete_step = 0  # Reset step for new process
-        st.rerun()  # Rerun to immediately start the step-by-step process
+#Ticketsystem anzeigen
+def show_ticket_system():
+
+    from TicketMail import show_email_inbox_tab, show_email_tab
+
+    from Main import engine
+    st.title("🎫 Ticketsystem")
+
     # Tabs für verschiedene Funktionen
     ticket_tabs = st.tabs(["📋 Ticketübersicht", "✏️ Ticket bearbeiten", "➕ Neues Ticket", "📊 Statistiken", "⚙️ Einstellungen", "📧 EMAIL"])
 
@@ -55,12 +40,12 @@ def add_ticket_delete_button(ticket_id):
     with ticket_tabs[5]:
         st.subheader("📧 E-Mail")
 
-    email_mode = st.radio("E-Mail-Funktion wählen:", ["📧 E-Mail senden", "📥 E-Mail empfangen"])
+        email_mode = st.radio("E-Mail-Funktion wählen:", ["📧 E-Mail senden", "📥 E-Mail empfangen"])
 
-    if email_mode == "📧 E-Mail senden":
-        show_email_tab()
-    elif email_mode == "📥 E-Mail empfangen":
-        show_email_inbox_tab()
+        if email_mode == "📧 E-Mail senden":
+            show_email_tab()
+        elif email_mode == "📥 E-Mail empfangen":
+            show_email_inbox_tab()
 
 # Ticketübersicht anzeigen
 def show_ticket_overview():
@@ -175,24 +160,6 @@ def show_ticket_overview():
     else:
         # Ticket-Tabelle anzeigen
         st.dataframe(tickets_df, use_container_width=True)
-
-        if not tickets_df.empty:
-            # Ticket auswählen für Details oder Löschung
-            selected_ticket_id = st.selectbox(
-            "Ticket auswählen für Details oder Löschung",
-            tickets_df["ID_Ticket"].tolist(),
-            format_func=lambda x: f"Ticket ID: {x} - {tickets_df[tickets_df['ID_Ticket'] == x]['Titel'].iloc[0]}"
-        )
-
-    if selected_ticket_id:
-        st.subheader(f"Details für Ticket ID: {selected_ticket_id}")
-        # Hier könnten Sie weitere Details des ausgewählten Tickets anzeigen
-        # Zum Beispiel:
-        # selected_ticket_details = tickets_df[tickets_df['ID_Ticket'] == selected_ticket_id].iloc[0]
-        # st.write(selected_ticket_details)
-
-        # HIER WIRD DER LÖSCH-BUTTON HINZUGEFÜGT
-        add_ticket_delete_button(selected_ticket_id)
 
         # Ticket-Details anzeigen
         if "selected_ticket_id" not in st.session_state:
@@ -1082,4 +1049,5 @@ def show_settings():
                         st.rerun()
                     except Exception as e:
                         st.error(f"Fehler beim Hinzufügen des Status: {str(e)}")
+
 

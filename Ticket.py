@@ -52,274 +52,55 @@ def add_ticket_delete_button(ticket_id):
     with col2:
         delete_button = st.button("🗑️ Ticket löschen", type="primary", use_container_width=True, key=f"delete_ticket_{ticket_id}")
 
-    # if delete_button:
-        # Store information in session state to trigger step-by-step deletion
-        st.session_state.delete_state = "step_by_step"  # Indicate that step-by-step deletion should start
-        st.session_state.delete_table = "ticket"
-        st.session_state.delete_id_column = "ID_Ticket"
-        st.session_state.delete_id_value = ticket_id
-        st.session_state.delete_step = 0  # Reset step for new process
-        st.rerun()
+    # Wenn der Lösch-Button geklickt wurde
+    if delete_button:
+        # Bestätigungsdialog anzeigen
+        st.warning(f"Sind Sie sicher, dass Sie Ticket #{ticket_id} löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden!")
 
-    # Helper function to execute SQL queries
-def _execute_sql_query(conn, query_str, params=None):
-    """
-    Executes a given SQL query with optional parameters.
-    Args:
-        conn: The SQLAlchemy connection object.
-        query_str: The SQL query string.
-        params: A dictionary of parameters for the query.
-    Returns:
-        The result of the execution.
-    """
-    return conn.execute(text(query_str), params or {})
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            confirm_delete = st.button("✅ Ja, Ticket löschen", type="primary", key=f"confirm_delete_{ticket_id}")
+        with col2:
+            cancel_delete = st.button("❌ Nein, abbrechen", key=f"cancel_delete_{ticket_id}")
 
-def execute_delete_step(table_choice_delete, id_spalte_delete,
-                        selected_id_to_delete, step):
-    """
-    Executes a single deletion step based on the table and step number.
-    Args:
-        table_choice_delete: Name of the table.
-        id_spalte_delete: Name of the ID column.
-        selected_id_to_delete: Value of the ID of the record to be deleted.
-        step: Current step in the deletion process.
-    Returns:
-        bool: True on success, False on error.
-    """
-    from Main import engine  # Import engine here to ensure it's available
-    try:
-        with engine.begin() as conn:
-            query_map = {
-                "ticket": {
-                    0: ("DELETE FROM ticket_kommentar WHERE ID_Ticket = :ticket_id",
-                        {"ticket_id": selected_id_to_delete}),
-                    1: ("DELETE FROM ticket_historie WHERE ID_Ticket = :ticket_id",
-                        {"ticket_id": selected_id_to_delete}),
-                    2: ("DELETE FROM ticket_mitarbeiter WHERE ID_Ticket = :ticket_id",
-                        {"ticket_id": selected_id_to_delete}),
-                    3: ("DELETE FROM ticket_kategorie WHERE ID_Ticket = :ticket_id",
-                        {"ticket_id": selected_id_to_delete}),
-                    4: ("DELETE FROM ticket WHERE ID_Ticket = :ticket_id",
-                        {"ticket_id": selected_id_to_delete}),
-                },
-                "mitarbeiter": {
-                    0: ("DELETE FROM ticket_mitarbeiter WHERE ID_Mitarbeiter "
-                        "= :mitarbeiter_id", {"mitarbeiter_id": selected_id_to_delete}),
-                    1: ("UPDATE ticket_historie SET Geändert_von = NULL WHERE "
-                        "Geändert_von = :mitarbeiter_id", {"mitarbeiter_id": selected_id_to_delete}),
-                    2: ("UPDATE ticket SET ID_Mitarbeiter = NULL WHERE ID_Mitarbeiter "
-                        "= :mitarbeiter_id", {"mitarbeiter_id": selected_id_to_delete}),
-                    3: ("UPDATE ticket_kommentar SET ID_Mitarbeiter = NULL WHERE "
-                        "ID_Mitarbeiter = :mitarbeiter_id", {"mitarbeiter_id": selected_id_to_delete}),
-                    4: ("DELETE FROM mitarbeiter WHERE ID_Mitarbeiter = :mitarbeiter_id",
-                        {"mitarbeiter_id": selected_id_to_delete}),
-                },
-                "kunde": {
-                    0: ("UPDATE ticket SET ID_Kunde = NULL WHERE ID_Kunde = :kunde_id",
-                        {"kunde_id": selected_id_to_delete}),
-                    1: ("DELETE FROM kunde WHERE ID_Kunde = :kunde_id",
-                        {"kunde_id": selected_id_to_delete}),
-                },
-                "kategorie": {
-                    0: ("DELETE FROM ticket_kategorie WHERE ID_Kategorie "
-                        "= :kategorie_id", {"kategorie_id": selected_id_to_delete}),
-                    1: ("DELETE FROM kategorie WHERE ID_Kategorie = :kategorie_id",
-                        {"kategorie_id": selected_id_to_delete}),
-                },
-                "status": {
-                    0: ("UPDATE ticket SET ID_Status = NULL WHERE ID_Status = :status_id",
-                        {"status_id": selected_id_to_delete}),
-                    1: ("DELETE FROM status WHERE ID_Status = :status_id",
-                        {"status_id": selected_id_to_delete}),
-                },
-                "rolle": {
-                    0: ("UPDATE mitarbeiter SET ID_Rolle = NULL WHERE ID_Rolle "
-                        "= :rolle_id", {"rolle_id": selected_id_to_delete}),
-                    1: ("DELETE FROM rolle WHERE ID_Rolle = :rolle_id",
-                        {"rolle_id": selected_id_to_delete}),
-                },
-            }
+        if confirm_delete:
+            try:
+                # Ticket löschen - die abhängigen Datensätze werden durch ON DELETE CASCADE automatisch gelöscht
+                with engine.begin() as conn:
+                    delete_query = text("""
+                        DELETE FROM ticket 
+                        WHERE ID_Ticket = :ticket_id
+                    """)
+                    result = conn.execute(delete_query, {"ticket_id": ticket_id})
 
-            if table_choice_delete in query_map and step in \
-                    query_map[table_choice_delete]:
-                query_str, params = query_map[table_choice_delete][step]
-                _execute_sql_query(conn, query_str, params)
-            else:
-                # Default case for other tables
-                query_str = f"DELETE FROM {table_choice_delete} WHERE " \
-                            f"{id_spalte_delete} = :value"
-                _execute_sql_query(conn, query_str, {"value": selected_id_to_delete})
+                    if result.rowcount > 0:
+                        st.success(f"✅ Ticket #{ticket_id} wurde erfolgreich gelöscht!")
 
-            return True
-    except Exception as e:
-        st.error(f" Fehler beim Ausführen des Schritts: {str(e)}")
-        # Detaillierte Fehlermeldung für Fremdschlüsselprobleme
-        error_str = str(e)
-        if "foreign key constraint fails" in error_str.lower():
-            st.error("""
-**Fremdschlüssel-Constraint-Fehler erkannt!**
-Der Datensatz kann nicht gelöscht werden, da er noch von anderen Tabellen
-referenziert wird.
-Bitte überprüfen Sie alle abhängigen Tabellen.
-""")
-            if "CONSTRAINT" in error_str and "FOREIGN KEY" in error_str:
-                st.error(f"""
-Fehlerdetails: {error_str}
-""")
-        return False
+                        # Session-State zurücksetzen
+                        if "selected_ticket_id" in st.session_state and st.session_state.selected_ticket_id == ticket_id:
+                            st.session_state.selected_ticket_id = None
 
-    # Initialisierung der Session-State-Variablen für den schrittweisen Löschvorgang
-    if "delete_step" not in st.session_state:
-        st.session_state.delete_step = 0
+                        # Kurze Verzögerung für bessere Benutzererfahrung
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Ticket #{ticket_id} konnte nicht gelöscht werden.")
 
-    if "delete_steps_total" not in st.session_state:
-        st.session_state.delete_steps_total = 1  # Standardwert, wird später aktualisiert
+            except Exception as e:
+                st.error(f"❌ Fehler beim Löschen des Tickets: {str(e)}")
 
-    if "delete_steps_info" not in st.session_state:
-        st.session_state.delete_steps_info = []  # Liste mit Informationen zu jedem Schritt
+                # Detaillierte Fehlermeldung für Fremdschlüssel-Probleme
+                error_str = str(e)
+                if "foreign key constraint fails" in error_str.lower():
+                    st.error("""
+                    **Fremdschlüssel-Constraint-Fehler erkannt!**
+                    
+                    Das Ticket kann nicht gelöscht werden, da es noch von anderen Tabellen referenziert wird.
+                    Bitte stellen Sie sicher, dass die ON DELETE CASCADE-Optionen in der Datenbank korrekt konfiguriert sind.
+                    """)
 
-    # Bestimme die Anzahl und Art der Löschschritte basierend auf der Tabelle
-    if st.session_state.delete_step == 0:
-        # Define deletion steps for each table in a structured way
-        deletion_configs = {
-            "ticket": {
-                "total": 5,
-                "info": [
-                    {"name": "Ticket-Kommentare", "description": "Löscht alle Kommentare "
-                                                                 "zu diesem Ticket"},
-                    {"name": "Ticket-Historie", "description": "Löscht alle Historieneinträge "
-                                                               "zu diesem Ticket"},
-                    {"name": "Ticket-Mitarbeiter-Zuordnungen", "description": "Löscht alle "
-                                                                              "Mitarbeiterzuordnungen zu diesem Ticket"},
-                    {"name": "Ticket-Kategorie-Zuordnungen", "description": "Löscht alle "
-                                                                            "Kategoriezuordnungen zu diesem Ticket"},
-                    {"name": "Ticket", "description": "Löscht das Ticket selbst"}
-                ]
-            },
-            "mitarbeiter": {
-                "total": 5,
-                "info": [
-                    {"name": "Ticket-Mitarbeiter-Zuordnungen", "description": "Löscht alle "
-                                                                              "Zuordnungen dieses Mitarbeiters zu Tickets"},
-                    {"name": "Ticket-Historie-Einträge", "description": "Setzt Mitarbeiter-"
-                                                                        "Referenzen in der Historie auf NULL"},
-                    {"name": "Tickets", "description": "Setzt Mitarbeiter-Referenzen in "
-                                                       "Tickets auf NULL"},
-                    {"name": "Kommentare", "description": "Setzt Mitarbeiter-Referenzen in "
-                                                          "Kommentaren auf NULL"},
-                    {"name": "Mitarbeiter", "description": "Löscht den Mitarbeiter selbst"}
-                ]
-            },
-            "kunde": {
-                "total": 2,
-                "info": [
-                    {"name": "Tickets", "description": "Setzt Kunden-Referenzen in Tickets "
-                                                       "auf NULL"},
-                    {"name": "Kunde", "description": "Löscht den Kunden selbst"}
-                ]
-            },
-            "kategorie": {
-                "total": 2,
-                "info": [
-                    {"name": "Ticket-Kategorie-Zuordnungen", "description": "Löscht alle "
-                                                                            "Zuordnungen dieser Kategorie zu Tickets"},
-                    {"name": "Kategorie", "description": "Löscht die Kategorie selbst"}
-                ]
-            },
-            "status": {
-                "total": 2,
-                "info": [
-                    {"name": "Tickets", "description": "Setzt Status-Referenzen in Tickets auf "
-                                                       "NULL"},
-                    {"name": "Status", "description": "Löscht den Status selbst"}
-                ]
-            },
-            "rolle": {
-                "total": 2,
-                "info": [
-                    {"name": "Mitarbeiter", "description": "Setzt Rollen-Referenzen bei "
-                                                           "Mitarbeitern auf NULL"},
-                    {"name": "Rolle", "description": "Löscht die Rolle selbst"}
-                ]
-            },
-        }
-        config = deletion_configs.get(table_choice_delete, {
-            "total": 1,
-            "info": [{
-                "name": table_choice_delete,
-                "description": f"Löscht den Datensatz aus {table_choice_delete}"
-            }]
-        })
-        st.session_state.delete_steps_total = config["total"]
-        st.session_state.delete_steps_info = config["info"]
-
-    # Fortschrittsanzeige
-    progress_percentage = (st.session_state.delete_step /
-                           st.session_state.delete_steps_total) * 100
-    st.progress(progress_percentage / 100)
-    st.write(f"Schritt {st.session_state.delete_step + 1} von "
-             f"{st.session_state.delete_steps_total}")
-
-    # Wenn alle Schritte abgeschlossen sind, zurücksetzen und Erfolg melden
-    if st.session_state.delete_step >= st.session_state.delete_steps_total:
-        st.success(f" Alle Löschschritte für {table_choice_delete} mit ID "
-                   f"{selected_id_to_delete} wurden erfolgreich abgeschlossen!")
-
-        # Daten neu laden
-        df_delete = pd.read_sql(f"SELECT * FROM {table_choice_delete}", con=engine)
-        st.write("Aktualisierte Tabellendaten:")
-        st.dataframe(df_delete)
-
-        # Session-State zurücksetzen
-        st.session_state.delete_step = 0
-        return True
-
-    # Aktuellen Schritt anzeigen
-    current_step_info = \
-        st.session_state.delete_steps_info[st.session_state.delete_step]
-    st.subheader(f"Schritt {st.session_state.delete_step + 1}: "
-                 f"{current_step_info["name"]}")
-    st.info(current_step_info["description"])
-
-    # Bestätigungsdialog für den aktuellen Schritt
-    st.warning(f"▲ Möchten Sie diesen Schritt ausführen? Diese Aktion kann nicht "
-               f"rückgängig gemacht werden!")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button(" Ja, ausführen",
-                     key=f"confirm_step_{st.session_state.delete_step}"):
-            # Führe den aktuellen Löschschritt aus
-            success = execute_delete_step(
-                table_choice_delete,
-                id_spalte_delete,
-                selected_id_to_delete,
-                st.session_state.delete_step
-            )
-            if success:
-                st.success(f" Schritt {st.session_state.delete_step + 1} erfolgreich "
-                           f"ausgeführt!")
-                # Zum nächsten Schritt
-                st.session_state.delete_step += 1
-                st.rerun()
-            else:
-                st.error(" Fehler beim Ausführen des Schritts!")
-                # Schritt nicht erhöhen, damit der Benutzer es erneut versuchen kann
-    with col2:
-        if st.button(" Überspringen", key=f"skip_step_{st.session_state.delete_step}"):
-            st.info(f"Schritt {st.session_state.delete_step + 1} übersprungen.")
-            # Zum nächsten Schritt ohne Ausführung
-            st.session_state.delete_step += 1
-            st.rerun()
-
-    # Option zum Abbrechen des gesamten Löschvorgangs
-    if st.button(" Gesamten Löschvorgang abbrechen", key="cancel_all_delete"):
-        st.warning("Löschvorgang abgebrochen.")
-        # Session-State zurücksetzen
-        st.session_state.delete_step = 0
-        return False
-
-    return None  # Noch nicht abgeschlossen
+        elif cancel_delete:
+            st.info("Löschvorgang abgebrochen.")
 
 # Hilfsfunktion: Spaltennamen einer Tabelle
 def get_columns(table):
